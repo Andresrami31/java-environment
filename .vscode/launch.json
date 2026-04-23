@@ -3,7 +3,7 @@
   "configurations": [
     {
       "type": "java",
-      "name": "Run Tic Tac Toe Main",
+      "name": "Run El Ahorcado Main",
       "request": "launch",
       "mainClass": "game.Main"
     }

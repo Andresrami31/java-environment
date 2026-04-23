@@ -1,14 +1,16 @@
 package game;
 
-import java.util.InputMismatchException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
 import java.util.Scanner;
 
 /**
- * Entry point and complete console implementation of a Tic Tac Toe game.
+ * Entry point and complete console implementation of a Hangman game.
  *
- * <p>This class contains the full game flow, board state management, input validation,
- * winner detection, draw detection, score tracking, and restart logic for a two-player
- * console-based Tic Tac Toe game.</p>
+ * <p>This class contains the full game flow, word selection, hidden word state management,
+ * input validation, win detection, loss detection, score tracking, and restart logic
+ * for a single-player console-based Hangman game.</p>
  *
  * <p>Even though the entire solution is contained in a single class as requested,
  * the code is organized into small, focused methods to improve readability,
@@ -16,62 +18,57 @@ import java.util.Scanner;
  *
  * <p>Game rules:</p>
  * <ul>
- *   <li>The board is 3x3.</li>
- *   <li>Two players participate: Player X and Player O.</li>
- *   <li>Players alternate turns.</li>
- *   <li>A move is valid only if the selected cell is empty.</li>
- *   <li>A player wins by placing three marks in a row, column, or diagonal.</li>
- *   <li>If the board is full and nobody wins, the game ends in a draw.</li>
+ *   <li>A secret word is randomly selected from a predefined list.</li>
+ *   <li>The word is shown as underscores, one per letter.</li>
+ *   <li>The player guesses one letter per turn.</li>
+ *   <li>Correct guesses reveal the letter in all matching positions.</li>
+ *   <li>Wrong guesses add a body part to the hangman drawing.</li>
+ *   <li>The player wins by revealing all letters before 6 wrong guesses.</li>
+ *   <li>The player loses when 6 wrong guesses are accumulated.</li>
  * </ul>
  *
  * <p>Console messages are displayed in Spanish, while source code and Javadoc
- * are written in English as requested.</p>
+ * are written in English.</p>
  *
- * @author OpenAI
  * @version 1.0
  * @since 17
  */
 public class Main {
 
-    /**
-     * Board size for the Tic Tac Toe game.
-     */
-    private static final int BOARD_SIZE = 3;
+    /** Maximum number of wrong guesses allowed before losing. */
+    private static final int MAX_WRONG_GUESSES = 6;
 
-    /**
-     * Marker used for empty cells.
-     */
-    private static final char EMPTY = ' ';
+    /** Predefined pool of words to pick from. */
+    private static final String[] WORD_LIST = {
+        "JAVA", "PROGRAMACION", "COMPUTADORA", "ALGORITMO", "VARIABLE",
+        "METODO", "CLASE", "OBJETO", "HERENCIA", "INTERFAZ",
+        "COMPILADOR", "DEPURADOR", "CONSOLA", "BUCLE", "CONDICION",
+        "ARREGLO", "CADENA", "ENTERO", "LOGICO", "FUNCION"
+    };
 
-    /**
-     * Scanner used to read user input from console.
-     */
+    /** Scanner used to read user input from the console. */
     private static final Scanner SCANNER = new Scanner(System.in);
 
-    /**
-     * Internal game board.
-     */
-    private static final char[][] board = new char[BOARD_SIZE][BOARD_SIZE];
+    /** Random instance used for word selection. */
+    private static final Random RANDOM = new Random();
 
-    /**
-     * Current player marker.
-     */
-    private static char currentPlayer = 'X';
+    /** The secret word for the current match, stored in uppercase. */
+    private static String secretWord;
 
-    /**
-     * Score counter for player X.
-     */
-    private static int scoreX = 0;
+    /** The visible state of the word, showing revealed letters and underscores. */
+    private static char[] visibleWord;
 
-    /**
-     * Score counter for player O.
-     */
-    private static int scoreO = 0;
+    /** List of letters the player has already guessed in the current match. */
+    private static List<Character> usedLetters;
 
-    /**
-     * Draw counter.
-     */
-    private static int draws = 0;
+    /** Number of wrong guesses in the current match. */
+    private static int wrongGuesses;
+
+    /** Accumulated win counter across all matches. */
+    private static int wins = 0;
+
+    /** Accumulated loss counter across all matches. */
+    private static int losses = 0;
 
     /**
      * Application entry point.
@@ -94,364 +91,241 @@ public class Main {
     }
 
     /**
-     * Prints the initial game welcome message.
+     * Prints the welcome banner and basic rules.
      */
     private static void printWelcomeMessage() {
         System.out.println("==========================================");
-        System.out.println("      BIENVENIDO AL JUEGO TIC TAC TOE     ");
+        System.out.println("    BIENVENIDO AL JUEGO DEL AHORCADO      ");
         System.out.println("==========================================");
         System.out.println("Reglas básicas:");
-        System.out.println("- Juegan 2 personas: X y O.");
-        System.out.println("- Gana quien logre 3 símbolos en línea.");
-        System.out.println("- Puede ser fila, columna o diagonal.");
-        System.out.println("- Si se llena el tablero y nadie gana, es empate.");
+        System.out.println("- Adivina la palabra secreta letra por letra.");
+        System.out.println("- Tienes un máximo de " + MAX_WRONG_GUESSES + " errores.");
+        System.out.println("- Cada error dibuja una parte del ahorcado.");
+        System.out.println("- Ganas si descubres la palabra antes de agotar los intentos.");
         System.out.println();
     }
 
     /**
-     * Initializes a new game by clearing the board and setting the initial player.
+     * Initializes a new match by selecting a word and resetting all match state.
      */
     private static void startNewGame() {
-        initializeBoard();
-        currentPlayer = 'X';
-        System.out.println("Se inicia una nueva partida.");
-        System.out.println("El jugador X comienza.");
+        secretWord = selectRandomWord();
+        initializeVisibleWord();
+        usedLetters = new ArrayList<>();
+        wrongGuesses = 0;
+        System.out.println("¡Nueva partida iniciada! La palabra tiene " + secretWord.length() + " letras.");
         System.out.println();
     }
 
     /**
-     * Runs the main loop for a single match until a win or draw occurs.
+     * Selects a random word from the word list and returns it in uppercase.
+     *
+     * @return a randomly chosen word in uppercase
+     */
+    private static String selectRandomWord() {
+        int index = RANDOM.nextInt(WORD_LIST.length);
+        return WORD_LIST[index].toUpperCase();
+    }
+
+    /**
+     * Initializes the visible word array with underscores, one per letter.
+     */
+    private static void initializeVisibleWord() {
+        visibleWord = new char[secretWord.length()];
+        for (int i = 0; i < secretWord.length(); i++) {
+            visibleWord[i] = '_';
+        }
+    }
+
+    /**
+     * Runs the main loop for a single match until the player wins or loses.
      */
     private static void playSingleMatch() {
-        boolean gameFinished = false;
-
-        while (!gameFinished) {
-            printBoard();
-            System.out.println("Turno del jugador " + currentPlayer + ".");
-            int[] move = readValidMove();
-            placeMove(move[0], move[1], currentPlayer);
-
-            if (hasPlayerWon(currentPlayer)) {
-                printBoard();
-                System.out.println("¡El jugador " + currentPlayer + " ha ganado!");
-                updateWinnerScore(currentPlayer);
-                gameFinished = true;
-            } else if (isBoardFull()) {
-                printBoard();
-                System.out.println("La partida terminó en empate.");
-                draws++;
-                gameFinished = true;
-            } else {
-                switchPlayer();
-            }
-        }
-    }
-
-    /**
-     * Fills the entire board with empty markers.
-     */
-    private static void initializeBoard() {
-        for (int row = 0; row < BOARD_SIZE; row++) {
-            for (int column = 0; column < BOARD_SIZE; column++) {
-                board[row][column] = EMPTY;
-            }
-        }
-    }
-
-    /**
-     * Prints the board to the console in a readable format.
-     *
-     * <p>Empty cells are displayed using numbers from 1 to 9 to guide
-     * the user when selecting a move.</p>
-     */
-    private static void printBoard() {
-        System.out.println();
-        System.out.println("Tablero actual:");
-        System.out.println();
-
-        int cellNumber = 1;
-
-        for (int row = 0; row < BOARD_SIZE; row++) {
-            System.out.print(" ");
-
-            for (int column = 0; column < BOARD_SIZE; column++) {
-                char cellValue = board[row][column];
-                char displayValue = (cellValue == EMPTY) ? Character.forDigit(cellNumber, 10) : cellValue;
-
-                System.out.print(displayValue);
-
-                if (column < BOARD_SIZE - 1) {
-                    System.out.print(" | ");
-                }
-
-                cellNumber++;
-            }
-
-            System.out.println();
-
-            if (row < BOARD_SIZE - 1) {
-                System.out.println("---+---+---");
-            }
-        }
-
-        System.out.println();
-    }
-
-    /**
-     * Reads and returns a valid move selected by the current player.
-     *
-     * <p>The user must enter a number between 1 and 9. The method validates
-     * that the input is numeric, within range, and references an available cell.</p>
-     *
-     * @return an array containing row and column positions in that order
-     */
-    private static int[] readValidMove() {
         while (true) {
-            int selectedPosition = readPositionFromUser();
+            printHangman();
+            printVisibleWord();
+            printUsedLetters();
 
-            if (!isPositionInRange(selectedPosition)) {
-                System.out.println("Entrada inválida. Debe ingresar un número entre 1 y 9.");
+            if (hasPlayerWon()) {
+                System.out.println("¡Felicitaciones! ¡Adivinaste la palabra: " + secretWord + "!");
+                wins++;
+                break;
+            }
+
+            if (hasPlayerLost()) {
+                printHangman();
+                System.out.println("¡Perdiste! La palabra era: " + secretWord);
+                losses++;
+                break;
+            }
+
+            char letter = readValidLetter();
+            processLetter(letter);
+        }
+    }
+
+    /**
+     * Prints the hangman ASCII drawing based on the current number of wrong guesses.
+     */
+    private static void printHangman() {
+        System.out.println();
+        System.out.println("  +---+");
+        System.out.println("  |   |");
+        System.out.println((wrongGuesses >= 1 ? "  O   |" : "      |"));
+        System.out.println((wrongGuesses == 2 ? "  |   |" : wrongGuesses == 3 ? " /|   |" : wrongGuesses >= 4 ? " /|\\  |" : "      |"));
+        System.out.println((wrongGuesses == 5 ? " /    |" : wrongGuesses >= 6 ? " / \\  |" : "      |"));
+        System.out.println("      |");
+        System.out.println("=========");
+        System.out.println();
+    }
+
+    /**
+     * Prints the current state of the visible word with spaces between characters.
+     */
+    private static void printVisibleWord() {
+        System.out.print("Palabra: ");
+        for (int i = 0; i < visibleWord.length; i++) {
+            System.out.print(visibleWord[i]);
+            if (i < visibleWord.length - 1) {
+                System.out.print(" ");
+            }
+        }
+        System.out.println();
+    }
+
+    /**
+     * Prints the list of letters already used in the current match.
+     */
+    private static void printUsedLetters() {
+        System.out.println("Letras usadas: " + usedLetters);
+        System.out.println("Errores: " + wrongGuesses + " / " + MAX_WRONG_GUESSES);
+        System.out.println();
+    }
+
+    /**
+     * Reads and returns a valid letter from the player.
+     *
+     * <p>Keeps prompting until the input is a single alphabetic character
+     * that has not been used in the current match.</p>
+     *
+     * @return the validated uppercase letter entered by the player
+     */
+    private static char readValidLetter() {
+        while (true) {
+            System.out.print("Ingresa una letra: ");
+            String input = SCANNER.nextLine().trim().toUpperCase();
+
+            if (!isValidLetter(input)) {
+                System.out.println("Entrada inválida. Debes ingresar una única letra (A-Z).");
                 continue;
             }
 
-            int[] coordinates = convertPositionToCoordinates(selectedPosition);
-            int row = coordinates[0];
-            int column = coordinates[1];
+            char letter = input.charAt(0);
 
-            if (!isCellAvailable(row, column)) {
-                System.out.println("La casilla seleccionada ya está ocupada. Intente nuevamente.");
+            if (isLetterAlreadyUsed(letter)) {
+                System.out.println("La letra '" + letter + "' ya fue usada. Intenta con otra.");
                 continue;
             }
 
-            return coordinates;
+            return letter;
         }
     }
 
     /**
-     * Reads a board position from the user.
+     * Validates that the input is exactly one alphabetic character.
      *
-     * @return the numeric board position entered by the user
+     * @param input the raw string entered by the user
+     * @return {@code true} if the input is a single letter; otherwise {@code false}
      */
-    private static int readPositionFromUser() {
-        while (true) {
-            try {
-                System.out.print("Jugador " + currentPlayer + ", ingrese una posición (1-9): ");
-                int position = SCANNER.nextInt();
-                SCANNER.nextLine();
-                return position;
-            } catch (InputMismatchException exception) {
-                System.out.println("Entrada inválida. Debe ingresar un número entero.");
-                SCANNER.nextLine();
-            }
-        }
+    private static boolean isValidLetter(String input) {
+        return input.length() == 1 && Character.isLetter(input.charAt(0));
     }
 
     /**
-     * Verifies whether the entered board position is within the valid range.
+     * Checks whether the given letter has already been guessed in this match.
      *
-     * @param position user-selected position
-     * @return {@code true} if the position is between 1 and 9; otherwise {@code false}
+     * @param letter the letter to check
+     * @return {@code true} if the letter is in the used list; otherwise {@code false}
      */
-    private static boolean isPositionInRange(int position) {
-        return position >= 1 && position <= 9;
+    private static boolean isLetterAlreadyUsed(char letter) {
+        return usedLetters.contains(letter);
     }
 
     /**
-     * Converts a board position from 1-9 into row and column coordinates.
+     * Processes a guessed letter: registers it, checks if it belongs to the word,
+     * and updates visible word or wrong guess counter accordingly.
      *
-     * <p>The mapping is performed from left to right and top to bottom:</p>
-     * <pre>
-     * 1 | 2 | 3
-     * 4 | 5 | 6
-     * 7 | 8 | 9
-     * </pre>
-     *
-     * @param position board position from 1 to 9
-     * @return an array containing row and column
+     * @param letter the validated letter guessed by the player
      */
-    private static int[] convertPositionToCoordinates(int position) {
-        int zeroBasedPosition = position - 1;
-        int row = zeroBasedPosition / BOARD_SIZE;
-        int column = zeroBasedPosition % BOARD_SIZE;
-        return new int[]{row, column};
-    }
+    private static void processLetter(char letter) {
+        usedLetters.add(letter);
 
-    /**
-     * Checks whether a specific board cell is available.
-     *
-     * @param row target row
-     * @param column target column
-     * @return {@code true} if the cell is empty; otherwise {@code false}
-     */
-    private static boolean isCellAvailable(int row, int column) {
-        return board[row][column] == EMPTY;
-    }
-
-    /**
-     * Places a player's mark on the specified board position.
-     *
-     * @param row target row
-     * @param column target column
-     * @param playerMark mark to place
-     */
-    private static void placeMove(int row, int column, char playerMark) {
-        board[row][column] = playerMark;
-    }
-
-    /**
-     * Determines whether the specified player has won the game.
-     *
-     * @param playerMark mark to evaluate
-     * @return {@code true} if the player has a complete row, column, or diagonal;
-     *         otherwise {@code false}
-     */
-    private static boolean hasPlayerWon(char playerMark) {
-        return hasCompletedAnyRow(playerMark)
-                || hasCompletedAnyColumn(playerMark)
-                || hasCompletedMainDiagonal(playerMark)
-                || hasCompletedSecondaryDiagonal(playerMark);
-    }
-
-    /**
-     * Checks whether the player has completed any row.
-     *
-     * @param playerMark mark to evaluate
-     * @return {@code true} if any row is fully occupied by the same mark
-     */
-    private static boolean hasCompletedAnyRow(char playerMark) {
-        for (int row = 0; row < BOARD_SIZE; row++) {
-            boolean fullRow = true;
-
-            for (int column = 0; column < BOARD_SIZE; column++) {
-                if (board[row][column] != playerMark) {
-                    fullRow = false;
-                    break;
-                }
-            }
-
-            if (fullRow) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Checks whether the player has completed any column.
-     *
-     * @param playerMark mark to evaluate
-     * @return {@code true} if any column is fully occupied by the same mark
-     */
-    private static boolean hasCompletedAnyColumn(char playerMark) {
-        for (int column = 0; column < BOARD_SIZE; column++) {
-            boolean fullColumn = true;
-
-            for (int row = 0; row < BOARD_SIZE; row++) {
-                if (board[row][column] != playerMark) {
-                    fullColumn = false;
-                    break;
-                }
-            }
-
-            if (fullColumn) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Checks whether the player has completed the main diagonal.
-     *
-     * @param playerMark mark to evaluate
-     * @return {@code true} if the main diagonal is fully occupied by the same mark
-     */
-    private static boolean hasCompletedMainDiagonal(char playerMark) {
-        for (int index = 0; index < BOARD_SIZE; index++) {
-            if (board[index][index] != playerMark) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * Checks whether the player has completed the secondary diagonal.
-     *
-     * @param playerMark mark to evaluate
-     * @return {@code true} if the secondary diagonal is fully occupied by the same mark
-     */
-    private static boolean hasCompletedSecondaryDiagonal(char playerMark) {
-        for (int row = 0; row < BOARD_SIZE; row++) {
-            int column = BOARD_SIZE - 1 - row;
-            if (board[row][column] != playerMark) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * Checks whether the board is completely full.
-     *
-     * @return {@code true} if there are no empty cells left; otherwise {@code false}
-     */
-    private static boolean isBoardFull() {
-        for (int row = 0; row < BOARD_SIZE; row++) {
-            for (int column = 0; column < BOARD_SIZE; column++) {
-                if (board[row][column] == EMPTY) {
-                    return false;
-                }
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * Switches the current active player.
-     */
-    private static void switchPlayer() {
-        currentPlayer = (currentPlayer == 'X') ? 'O' : 'X';
-    }
-
-    /**
-     * Updates the score of the winning player.
-     *
-     * @param playerMark winning player mark
-     */
-    private static void updateWinnerScore(char playerMark) {
-        if (playerMark == 'X') {
-            scoreX++;
+        if (secretWord.indexOf(letter) >= 0) {
+            updateVisibleWord(letter);
+            System.out.println("¡Correcto! La letra '" + letter + "' está en la palabra.");
         } else {
-            scoreO++;
+            wrongGuesses++;
+            System.out.println("Incorrecto. La letra '" + letter + "' no está en la palabra.");
+        }
+
+        System.out.println();
+    }
+
+    /**
+     * Reveals all positions in the visible word where the given letter appears.
+     *
+     * @param letter the correctly guessed letter
+     */
+    private static void updateVisibleWord(char letter) {
+        for (int i = 0; i < secretWord.length(); i++) {
+            if (secretWord.charAt(i) == letter) {
+                visibleWord[i] = letter;
+            }
         }
     }
 
     /**
-     * Prints the accumulated scoreboard to the console.
+     * Determines whether the player has won by checking if all letters are revealed.
+     *
+     * @return {@code true} if no underscores remain in the visible word; otherwise {@code false}
+     */
+    private static boolean hasPlayerWon() {
+        for (char c : visibleWord) {
+            if (c == '_') {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Determines whether the player has lost by reaching the maximum wrong guesses.
+     *
+     * @return {@code true} if wrong guesses equal the maximum allowed; otherwise {@code false}
+     */
+    private static boolean hasPlayerLost() {
+        return wrongGuesses >= MAX_WRONG_GUESSES;
+    }
+
+    /**
+     * Prints the accumulated scoreboard showing wins and losses.
      */
     private static void printScoreboard() {
         System.out.println();
         System.out.println("Marcador acumulado:");
-        System.out.println("Jugador X: " + scoreX);
-        System.out.println("Jugador O: " + scoreO);
-        System.out.println("Empates  : " + draws);
+        System.out.println("Victorias: " + wins);
+        System.out.println("Derrotas : " + losses);
         System.out.println();
     }
 
     /**
-     * Asks the user if a new match should be started.
+     * Asks the player whether they want to start a new match.
      *
-     * @return {@code true} if the user wants to continue playing; otherwise {@code false}
+     * @return {@code true} if the player wants to continue; otherwise {@code false}
      */
     private static boolean askIfUserWantsToPlayAgain() {
         while (true) {
-            System.out.print("¿Desean jugar otra partida? (S/N): ");
+            System.out.print("¿Deseas jugar otra partida? (S/N): ");
             String answer = SCANNER.nextLine().trim().toUpperCase();
 
             if ("S".equals(answer)) {
@@ -463,7 +337,7 @@ public class Main {
                 return false;
             }
 
-            System.out.println("Respuesta inválida. Ingrese S para sí o N para no.");
+            System.out.println("Respuesta inválida. Ingresa S para sí o N para no.");
         }
     }
 
@@ -472,7 +346,7 @@ public class Main {
      */
     private static void printFarewellMessage() {
         System.out.println();
-        System.out.println("Gracias por jugar Tic Tac Toe.");
+        System.out.println("Gracias por jugar El Ahorcado.");
         System.out.println("Programa finalizado.");
     }
 }
