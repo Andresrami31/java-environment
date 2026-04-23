@@ -2,11 +2,11 @@
 
 # Integrantes
 
-Niny Johana Parra Garcia 20261099009
-Elheim Oquendo 20261099008
-Brayan Vargas 20261099011
-Andres Ramirez 20261099010
-
+Niny Johana Parra Garcia
+Elheim Oquendo 
+Brayan Vargas 
+Andres Ramirez 
+Laura Merchan
 
 ## Descripción del proyecto
 
